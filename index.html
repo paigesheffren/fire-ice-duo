@@ -6,13 +6,13 @@
   <title>Fire & Ice Duo</title>
   <style>
     html, body { height: 100%; margin: 0; background:#0b0e13; color:#e6e6e6; font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji"; }
-    .wrap { display:flex; flex-direction:column; height:100%; }
-    header { padding:10px 14px; display:flex; gap:10px; align-items:center; background:#0f131a; border-bottom:1px solid #1b2330; }
+    .wrap { display:flex; flex-direction:column; height:100%; min-height:100vh; }
+    header { padding:10px 14px; display:flex; gap:10px; align-items:center; background:#0f131a; border-bottom:1px solid #1b2330; min-height:52px; }
     header h1 { font-size:16px; margin:0; font-weight:700; letter-spacing:.4px; }
     header .btn { background:#1a2230; border:1px solid #293449; color:#d7e3ff; padding:8px 10px; border-radius:10px; cursor:pointer; font-weight:600; }
     header .btn:hover { filter:brightness(1.1); }
     #hud { margin-left:auto; display:flex; gap:14px; align-items:center; font-size:13px; color:#b9c7e6; }
-    #game { width:100%; height:100%; display:block; background:radial-gradient(1200px 500px at 50% -200px, rgba(60,120,255,.12), rgba(0,0,0,0)) , #0b0e13; }
+    #game { flex:1 1 auto; width:100%; display:block; background:radial-gradient(1200px 500px at 50% -200px, rgba(60,120,255,.12), rgba(0,0,0,0)) , #0b0e13; }
     footer { padding:8px 14px; font-size:12px; color:#91a3c5; background:#0f131a; border-top:1px solid #1b2330; }
     a { color:#9ed0ff; text-decoration:none; }
     a:hover { text-decoration:underline; }
@@ -386,7 +386,26 @@
 
   // --- Game Loop ------------------------------------------------------------
   let last = 0; function loop(ts){
-    if (!world.running) { requestAnimationFrame(loop); return draw(); }
+    try {
+      if (!world.running) { requestAnimationFrame(loop); return draw(); }
+      if (!last) last = ts;
+      const dt = (ts-last)/16.67; last = ts;
+
+      if (players.length < 2) { resetLevel(world.levelIndex); }
+
+      for (const p of players) moveAndCollide(p);
+      draw();
+    } catch (err) {
+      console.error(err);
+      world.running = false;
+      ctx.setTransform(1,0,0,1,0,0);
+      ctx.fillStyle = '#0b0e13'; ctx.fillRect(0,0,canvas.width,canvas.height);
+      ctx.fillStyle = '#ff7a5c'; ctx.font = '16px system-ui';
+      ctx.fillText('Error: '+ err.message, 16, 28);
+    } finally {
+      requestAnimationFrame(loop);
+    }
+  }
     const dt = (ts-last)/16.67; last = ts;
 
     for (const p of players) moveAndCollide(p);
@@ -415,7 +434,24 @@
   // --- Responsive canvas backing store scaling ------------------------------
   function resize(){
     const dpr = window.devicePixelRatio || 1;
-    const { clientWidth:w, clientHeight:h } = canvas;
+    // Size canvas to its CSS size (fill remaining viewport height)
+    const cssW = canvas.clientWidth || canvas.getBoundingClientRect().width || 960;
+    // Compute remaining height = viewport - header - footer
+    const headerH = document.querySelector('header')?.getBoundingClientRect().height || 52;
+    const footerH = document.querySelector('footer')?.getBoundingClientRect().height || 36;
+    const cssH = Math.max(360, Math.floor(window.innerHeight - headerH - footerH));
+
+    canvas.style.height = cssH + 'px';
+
+    canvas.width  = Math.floor(cssW * dpr);
+    canvas.height = Math.floor(cssH * dpr);
+
+    // Reset transform before drawing, then scale for DPR
+    ctx.setTransform(1,0,0,1,0,0);
+    ctx.scale(dpr, dpr);
+    // Improve pixel snapping
+    ctx.imageSmoothingEnabled = true;
+  } = canvas;
     const bw = Math.max(640, w), bh = Math.max(360, h);
     canvas.width = Math.floor(bw * dpr);
     canvas.height= Math.floor(bh * dpr);
